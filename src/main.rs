@@ -2,6 +2,9 @@ mod args;
 mod check;
 mod report;
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry::Occupied;
+use std::collections::hash_map::Entry::Vacant;
 use std::io::Write;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -11,6 +14,7 @@ use std::io::stdout;
 use structopt::StructOpt;
 
 use args::Command;
+use report::Failure;
 
 fn main() -> anyhow::Result<()> {
     let command = Command::from_args();
@@ -26,15 +30,49 @@ fn main() -> anyhow::Result<()> {
     std::thread::spawn(|| check.run());
 
     let mut progress = Progress::new(command.repeat);
+    let mut results = HashMap::new();
 
     for msg in rcv {
-        let _msg = msg?;
+        let msg = msg?;
 
         progress.progress();
         progress.print();
+
+        match msg {
+            report::Report::Failures(failures) => {
+                for failure in failures  {
+                    match results.entry(failure.name.clone()) {
+                        Vacant(entry) => {
+                            entry.insert((failure, 1));
+                        },
+                        Occupied(mut entry) => {
+                            entry.get_mut().1 += 1;
+                        },
+                    }
+                }
+            },
+            report::Report::Ok => (),
+        }
     }
+    println!();
+
+    print_report(results, command.repeat);
 
     Ok(())
+}
+
+fn print_report(results: HashMap<String, (Failure, usize)>, iters: usize) {
+    if results.is_empty() {
+        return println!("found no failing tests.");
+    }
+
+    println!("--- Found {} failing test ---\n", results.len());
+    for (_, (failure, count)) in results {
+        println!("test: {}, {}/{} ({}%)", failure.name, count, iters, (count as f64) * 100.0 / (iters as f64));
+        println!("message:\n{}", failure.message);
+        println!("\n--------------------------------\n")
+    }
+
 }
 
 struct Progress {
@@ -66,7 +104,7 @@ impl Progress {
     fn print(&self) {
         let fill = self.current * 50 / self.total;
         let out = format!("\r[{:<50}] {}/{}, eta: {}",
-            (0..fill.saturating_sub(1)).map(|_| '=').chain(Some('>')).collect::<String>(),
+            (0..fill.saturating_sub(1)).map(|_| '=').chain(Some('>')).take(50).collect::<String>(),
             self.current,
             self.total,
             self.eta.map(|d| format!("{} secs", d.as_secs())).unwrap_or_else(|| String::from("Unknown")),
