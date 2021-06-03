@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, path::PathBuf};
 
 use structopt::StructOpt;
 
@@ -21,7 +21,7 @@ pub struct Args {
     pub release: bool,
     /// The number of times the tests have to be ran.
     #[structopt(long, short, default_value = "100")]
-    pub repeat: usize,
+    pub iter: usize,
     /// If set, runs for all the iteration defined by repeat, otherwise, stops as soon as a faling
     /// test is found.
     #[structopt(long, short)]
@@ -29,6 +29,13 @@ pub struct Args {
     /// Pass custom arguments to cargo test.
     #[structopt(long, short)]
     pub args: Option<String>,
+    /// Whether to record the failing tests using rr. This require rr to be installed on your
+    /// system.
+    #[structopt(long, short)]
+    pub record: bool,
+    /// Where to save the rr recording.
+    #[structopt(long, short = "o")]
+    pub record_out_dir: Option<PathBuf>,
 }
 
 impl Deref for Command {
