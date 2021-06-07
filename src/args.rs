@@ -29,13 +29,23 @@ pub struct Args {
     /// Pass custom arguments to cargo test.
     #[structopt(long, short)]
     pub args: Option<String>,
+
+    #[structopt(flatten)]
+    pub rr: RrArgs
+}
+
+#[derive(Debug, StructOpt)]
+pub struct RrArgs {
     /// Whether to record the failing tests using rr. This require rr to be installed on your
     /// system.
     #[structopt(long, short)]
     pub record: bool,
     /// Where to save the rr recording.
-    #[structopt(long, short = "o")]
+    #[structopt(long, short = "o", requires = "record")]
     pub record_out_dir: Option<PathBuf>,
+    /// Enable chaos mode for rr
+    #[structopt(long, requires = "record")]
+    pub chaos: bool,
 }
 
 impl Deref for Command {

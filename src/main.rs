@@ -145,9 +145,9 @@ fn main() -> anyhow::Result<()> {
     let command = Command::from_args();
 
     let bin_paths = compile_tests(&command)?;
-    let mut suite = Runner::new(bin_paths, command.record);
+    let mut suite = Runner::new(bin_paths, &command.rr);
 
-    let record_out_dir = match command.record_out_dir {
+    let record_out_dir = match command.rr.record_out_dir {
         Some(ref command) => command.clone(),
         None => PathBuf::from(format!("recording_{}", Utc::now().format("%Y%m%d%H%M%S"))),
     };
@@ -155,7 +155,7 @@ fn main() -> anyhow::Result<()> {
     let mut progress = Progress::new(command.iter);
     let mut reports = Reports::new(&record_out_dir, command.iter);
 
-    if command.record {
+    if command.rr.record {
         std::fs::create_dir_all(&record_out_dir)?;
     }
 
@@ -177,52 +177,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct Progress {
-    start: Instant,
-    total: usize,
-    current: usize,
-    eta: Option<Duration>,
-}
-
-impl Progress {
-    fn new(total: usize) -> Self {
-        Self {
-            start: Instant::now(),
-            total,
-            current: 0,
-            eta: None,
-        }
-    }
-
-    fn progress(&mut self) {
-        self.current += 1;
-        let elapsed = self.start.elapsed().as_secs() as usize;
-        if elapsed > 0 {
-            let eta = (elapsed * (self.total - self.current)) / self.current;
-            self.eta = Some(Duration::from_secs(eta as u64));
-        }
-    }
-
-    fn print(&self) {
-        let fill = self.current * 50 / self.total;
-        let out = format!(
-            "\r[{:<50}] {}/{}, eta: {}",
-            (0..fill.saturating_sub(1))
-                .map(|_| '=')
-                .chain(Some('>'))
-                .take(50)
-                .collect::<String>(),
-            self.current,
-            self.total,
-            self.eta
-                .map(|d| format!("{} secs", d.as_secs()))
-                .unwrap_or_else(|| String::from("Unknown")),
-        );
-        let mut stdout = stdout();
-        stdout.write_all(out.as_bytes()).unwrap();
-        stdout.flush().unwrap();
-    }
-}
 
 #[cfg(test)]
 mod test {

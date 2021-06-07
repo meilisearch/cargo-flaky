@@ -7,33 +7,110 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use subprocess::{Exec, Redirection};
 use tempfile::TempDir;
+use indicatif::ProgressBar;
 
+use crate::args::RrOptions;
 use crate::report::{Failure, Report};
 
 static ERROR_LINE_MATCHER: Lazy<Regex> = Lazy::new(|| Regex::new(r"---- (.*) ----").unwrap());
 
-pub struct Runner {
+pub struct Runner<'a> {
     pub bins: Vec<PathBuf>,
-    pub record: bool,
+    pub rr: &'a RrOptions,
+    times: usize,
+}
+
+struct RrTask<'a> {
+    bin: PathBuf,
+    opts: &'a RrOptions,
     iter: usize,
 }
 
-impl Runner {
-    pub fn new(bins: Vec<PathBuf>, record: bool) -> Self {
+impl<'a> RrTask<'a> {
+    fn new(bin: &Path, opts: &'a RrOptions) -> Self {
+        Self {
+            bin: bin.to_owned(),
+            opts,
+            iter: 0,
+        }
+
+    }
+
+    fn cmd(&self, record_path: &Path) -> Exec {
+            let mut cmd = Exec::cmd("rr");
+
+            cmd = cmd.arg("record");
+
+            if self.opts.chaos {
+                cmd = cmd.arg("--chaos");
+            }
+
+            let mut out = cmd
+                .arg("-o")
+                .arg(record_path.join(format!("record_iter_{}", self.iter)))
+                .arg(self.bin)
+                .stdout(Redirection::Pipe)
+                .stderr(Redirection::Merge);
+        cmd
+    }
+}
+
+impl Task for RrTask<'_> {
+    fn run(&mut self) -> anyhow::Result<Vec<Failure>> {
+        self.iter += 1;
+        let temp = Rc::new(tempfile::tempdir_in(".")?);
+        let mut buf = String::new();
+
+        let out = self.cmd(temp.path()).popen()?;
+
+        out.stdout
+            .take()
+            .context("could not read from process stdout")?
+            .read_to_string(&mut buf)?;
+
+        let reader = Cursor::new(buf.as_bytes());
+
+        let ret = parse_test_output(reader, Some(temp.clone()), &self.bin, self.iter)?;
+
+        // check if there was an issue with rr and return it
+        if !out.wait()?.success() && ret.is_empty() {
+            anyhow::bail!("rr exited with failure:\n{}", buf);
+        }
+
+        Ok(ret)
+    }
+}
+
+trait Task {
+    fn run(&mut self) -> anyhow::Result<Vec<Failure>>;
+}
+
+impl<'a> Runner<'a> {
+    pub fn new(bins: Vec<PathBuf>, rr: &'a RrOptions, times: usize) -> Self {
         Self {
             bins,
-            record,
-            iter: 0,
+            rr,
+            times,
         }
     }
 
     pub fn run(&mut self) -> anyhow::Result<Report> {
-        self.iter += 1;
-        if self.record {
-            self.run_record_test_suite()
-        } else {
-            self.run_test_suite()
+        for bin in bins {
+            println!("Running tests from {}", bin.display());
+            let task = if self.rr.record {
+                Box::new(RrTask::new(&bin,&self.rr))
+            } else {
+                todo!()
+            };
+
+
+            let progress = ProgressBar::new(self.times as u64);
+            let progress = progress.wrap_iter((0..self.times).map(|_| task.run()));
+
+
+
         }
+        todo!()
     }
 
     fn run_record_test_suite(&self) -> anyhow::Result<Report> {
@@ -41,9 +118,15 @@ impl Runner {
         let mut buf = String::new();
         for bin in self.bins.iter() {
             let temp = Rc::new(tempfile::tempdir_in(".")?);
-            let cmd = Exec::cmd("rr");
+            let mut cmd = Exec::cmd("rr");
+
+            cmd = cmd.arg("record");
+
+            if self.rr.chaos {
+                cmd = cmd.arg("--chaos");
+            }
+
             let mut out = cmd
-                .arg("record")
                 .arg("-o")
                 .arg(temp.path().join(format!("record_iter_{}", self.iter)))
                 .arg(bin)
