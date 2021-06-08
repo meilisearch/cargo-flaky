@@ -149,7 +149,7 @@ impl<'a> RrTask<'a> {
 
         cmd = cmd.arg("record");
 
-        if let Some(true) = self.opts.chaos {
+        if self.opts.chaos {
             cmd = cmd.arg("--chaos");
         }
 
@@ -214,7 +214,7 @@ impl<'a> Runner<'a> {
 
         for bin in self.bins.iter() {
             println!("Running tests from {}", bin.display());
-            let mut task: Box<dyn Task> = if let Some(true) = self.rr.record {
+            let mut task: Box<dyn Task> = if self.rr.record {
                 Box::new(RrTask::new(&bin, &self.rr, &self.test_opts))
             } else {
                 Box::new(TestTask::new(&bin, &self.test_opts))

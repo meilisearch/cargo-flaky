@@ -39,13 +39,13 @@ pub struct RrOptions {
     /// Whether to record the failing tests using rr. This require rr to be installed on your
     /// system.
     #[structopt(long, short)]
-    pub record: Option<bool>,
+    pub record: bool,
     /// Where to save the rr recording.
     #[structopt(long, short = "o", requires_if("record", "true"), default_value = "recordings")]
     pub record_out_dir: PathBuf,
     /// Enable chaos mode for rr
     #[structopt(long, requires_if("record", "true"))]
-    pub chaos: Option<bool>,
+    pub chaos: bool,
 }
 
 #[derive(Debug, StructOpt)]
