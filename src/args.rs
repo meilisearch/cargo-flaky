@@ -29,6 +29,9 @@ pub struct Args {
 
     #[structopt(flatten)]
     pub rr: RrOptions,
+
+    #[structopt(flatten)]
+    pub test_opts: TestOptions,
 }
 
 #[derive(Debug, StructOpt)]
@@ -43,6 +46,12 @@ pub struct RrOptions {
     /// Enable chaos mode for rr
     #[structopt(long, requires_if("record", "true"))]
     pub chaos: Option<bool>,
+}
+
+#[derive(Debug, StructOpt)]
+pub struct TestOptions {
+    #[structopt(long, short)]
+    pub jobs: Option<usize>,
 }
 
 impl Deref for Command {

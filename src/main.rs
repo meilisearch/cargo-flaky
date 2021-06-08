@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use cargo::core::compiler::CompileMode;
 use cargo::core::Workspace;
+use cargo::core::compiler::MessageFormat;
 use cargo::ops::compile;
 use cargo::ops::CompileOptions;
 use cargo::util::config::Config;
@@ -21,6 +22,7 @@ fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
     let workspace = Workspace::new(&manifest_path, &config)?;
 
     let mut options = CompileOptions::new(&config, CompileMode::Test)?;
+    options.build_config.message_format = MessageFormat::Short;
 
     if command.release {
         let profile = InternedString::new("release");
@@ -38,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
     let bin_paths = compile_tests(&command)?;
 
-    let mut runner = Runner::new(bin_paths , &command.rr, command.iter);
+    let mut runner = Runner::new(bin_paths , &command.rr, command.iter, &command.test_opts);
 
     let reports = runner.run()?;
 

@@ -5,7 +5,6 @@ use std::io::{BufRead, BufReader, Cursor, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use indicatif::HumanDuration;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use once_cell::sync::Lazy;
@@ -14,6 +13,7 @@ use subprocess::{Exec, Redirection};
 use tempfile::TempDir;
 
 use crate::args::RrOptions;
+use crate::args::TestOptions;
 use crate::report::Failure;
 
 static ERROR_LINE_MATCHER: Lazy<Regex> = Lazy::new(|| Regex::new(r"---- (.*) ----").unwrap());
@@ -55,12 +55,12 @@ impl fmt::Display for Reports {
                 self.total_iters,
                 (report.occurences as f64 / self.total_iters as f64) * 100.0
             )?;
-            writeln!(f, "path:\n{}", report.bin.display())?;
+            writeln!(f, "path: {}", report.bin.display())?;
             if let Some(ref path) = report.recording {
                 writeln!(f, "recording available at: {}", path.display())?;
             }
             writeln!(f, "message:\n{}", report.message)?;
-            writeln!(f, "------------------------------------")?;
+            writeln!(f, "\n------------------------------------")?;
         }
         Ok(())
     }
@@ -70,35 +70,43 @@ pub struct Runner<'a> {
     pub bins: Vec<PathBuf>,
     pub rr: &'a RrOptions,
     times: usize,
+    test_opts: &'a TestOptions,
 }
 
 struct RrTask<'a> {
     bin: PathBuf,
     opts: &'a RrOptions,
+    test_opts: &'a TestOptions,
     iter: usize,
 }
 
-struct TestTask {
+struct TestTask<'a> {
     bin: PathBuf,
     iter: usize,
+    test_opts: &'a TestOptions,
 }
 
-impl TestTask {
-    fn new(bin: &Path) -> Self {
+impl<'a> TestTask<'a> {
+    fn new(bin: &Path, test_opts: &'a TestOptions) -> Self {
         Self {
             bin: bin.to_owned(),
             iter: 0,
+            test_opts,
         }
     }
 }
 
-impl Task for TestTask {
+impl Task for TestTask<'_> {
     fn run(&mut self) -> anyhow::Result<Report> {
         self.iter += 1;
 
         let mut buf = String::new();
 
-        let mut out = Exec::cmd(&self.bin)
+        let test_threads = self.test_opts.jobs.unwrap_or_else(|| num_cpus::get()).to_string();
+        let cmd = Exec::cmd(&self.bin)
+            .args(&["--test-threads", &test_threads]);
+
+        let mut out = cmd
             .stdout(Redirection::Pipe)
             .stderr(Redirection::Merge)
             .popen()?;
@@ -127,11 +135,12 @@ impl Task for TestTask {
 }
 
 impl<'a> RrTask<'a> {
-    fn new(bin: &Path, opts: &'a RrOptions) -> Self {
+    fn new(bin: &Path, opts: &'a RrOptions, test_opts: &'a TestOptions) -> Self {
         Self {
             bin: bin.to_owned(),
             opts,
             iter: 0,
+            test_opts,
         }
     }
 
@@ -144,12 +153,18 @@ impl<'a> RrTask<'a> {
             cmd = cmd.arg("--chaos");
         }
 
+        let test_threads = self.test_opts.jobs.unwrap_or_else(|| num_cpus::get()).to_string();
+
         cmd = cmd
             .arg("-o")
             .arg(record_path.join(format!("record_iter_{}", self.iter)))
             .arg(&self.bin)
+            .args(&["--test-threads", &test_threads]);
+
+        cmd = cmd
             .stdout(Redirection::Pipe)
             .stderr(Redirection::Merge);
+
         cmd
     }
 }
@@ -190,8 +205,8 @@ trait Task {
 }
 
 impl<'a> Runner<'a> {
-    pub fn new(bins: Vec<PathBuf>, rr: &'a RrOptions, times: usize) -> Self {
-        Self { bins, rr, times }
+    pub fn new(bins: Vec<PathBuf>, rr: &'a RrOptions, times: usize, test_opts: &'a TestOptions) -> Self {
+        Self { bins, rr, times, test_opts }
     }
 
     pub fn run(&mut self) -> anyhow::Result<Reports> {
@@ -200,9 +215,9 @@ impl<'a> Runner<'a> {
         for bin in self.bins.iter() {
             println!("Running tests from {}", bin.display());
             let mut task: Box<dyn Task> = if let Some(true) = self.rr.record {
-                Box::new(RrTask::new(&bin, &self.rr))
+                Box::new(RrTask::new(&bin, &self.rr, &self.test_opts))
             } else {
-                Box::new(TestTask::new(&bin))
+                Box::new(TestTask::new(&bin, &self.test_opts))
             };
 
             let bar = ProgressBar::new(self.times as u64);
@@ -210,6 +225,7 @@ impl<'a> Runner<'a> {
                 .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} eta: {eta}")
                 .progress_chars("##-"));
 
+            bar.tick();
 
             for i in 0..self.times {
                 let mut dst_recordings = None;

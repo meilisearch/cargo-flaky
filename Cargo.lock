@@ -146,6 +146,7 @@ dependencies = [
  "cargo",
  "chrono",
  "indicatif",
+ "num_cpus",
  "once_cell",
  "regex",
  "structopt",
