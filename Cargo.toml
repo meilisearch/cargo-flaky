@@ -1,6 +1,6 @@
 [package]
 name = "cargo-flaky"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["marin postma <postma.marin@protonmail.com>"]
 edition = "2018"
 license = "MIT"
