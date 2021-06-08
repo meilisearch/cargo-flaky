@@ -25,27 +25,24 @@ pub struct Args {
     /// If set, runs for all the iteration defined by repeat, otherwise, stops as soon as a faling
     /// test is found.
     #[structopt(long, short)]
-    pub exhaustive: bool,
-    /// Pass custom arguments to cargo test.
-    #[structopt(long, short)]
     pub args: Option<String>,
 
     #[structopt(flatten)]
-    pub rr: RrArgs
+    pub rr: RrOptions,
 }
 
 #[derive(Debug, StructOpt)]
-pub struct RrArgs {
+pub struct RrOptions {
     /// Whether to record the failing tests using rr. This require rr to be installed on your
     /// system.
     #[structopt(long, short)]
-    pub record: bool,
+    pub record: Option<bool>,
     /// Where to save the rr recording.
-    #[structopt(long, short = "o", requires = "record")]
-    pub record_out_dir: Option<PathBuf>,
+    #[structopt(long, short = "o", requires_if("record", "true"), default_value = "recordings")]
+    pub record_out_dir: PathBuf,
     /// Enable chaos mode for rr
-    #[structopt(long, requires = "record")]
-    pub chaos: bool,
+    #[structopt(long, requires_if("record", "true"))]
+    pub chaos: Option<bool>,
 }
 
 impl Deref for Command {
