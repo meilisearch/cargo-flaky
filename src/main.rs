@@ -2,62 +2,74 @@ mod args;
 mod report;
 mod runner;
 
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use cargo::core::compiler::CompileMode;
-use cargo::core::Workspace;
-use cargo::core::compiler::MessageFormat;
-use cargo::ops::compile;
-use cargo::ops::CompileOptions;
-use cargo::util::config::Config;
-use cargo::util::interning::InternedString;
-use runner::Runner;
-use structopt::StructOpt;
+use anyhow::Context;
 use args::Command;
 use once_cell::sync::Lazy;
+use runner::Runner;
+use serde_json::Value;
+use structopt::StructOpt;
+use subprocess::{Exec, Redirection};
 
 pub static SHOULD_EXIT: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 
 fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
-    let manifest_path = std::env::current_dir()?.join("Cargo.toml");
-    let config = Config::default().unwrap();
-    let workspace = Workspace::new(&manifest_path, &config)?;
-
-    let mut options = CompileOptions::new(&config, CompileMode::Test)?;
-    options.build_config.message_format = MessageFormat::Human;
+    let mut cmd = Exec::cmd("cargo");
+    cmd = cmd.args(&["build", "--tests", "--message-format", "json"]);
 
     if command.release {
-        let profile = InternedString::new("release");
-        options.build_config.requested_profile = profile;
+        cmd = cmd.arg("--release");
     }
 
-    let compilation = compile(&workspace, &options)?;
+    let mut out = cmd.stdout(Redirection::Pipe).popen()?;
 
-    let paths = compilation.tests.into_iter().map(|c| c.path).collect();
-    Ok(paths)
+    let stdout = out.stdout.take().context("could not read from stdout")?;
+    let mut reader = BufReader::new(stdout);
+    let mut buf = String::new();
+    let mut bins = Vec::new();
+    while reader.read_line(&mut buf)? > 0 {
+        if let Some('{') = buf.chars().next() {
+            let json: Value = serde_json::from_str(&buf)?;
+            if let Some(reason) = json.get("reason") {
+                if reason == "compiler-artifact"
+                    && json["target"]["kind"].as_array().unwrap() == &["bin"]
+                {
+                    for path in json["filenames"]
+                        .as_array()
+                        .context("invalid json in cargo log")?
+                    {
+                        bins.push(PathBuf::from(path.as_str().unwrap()));
+                    }
+                }
+            }
+        } else {
+            print!("{}", buf);
+        }
+        buf.clear();
+    }
+
+    Ok(bins)
 }
 
 fn main() -> anyhow::Result<()> {
-
     ctrlc::set_handler(move || {
         SHOULD_EXIT.store(true, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let command = Command::from_args();
 
     let bin_paths = compile_tests(&command)?;
 
-    let mut runner = Runner::new(bin_paths , &command.rr, command.iter, &command.test_opts);
-
+    let mut runner = Runner::new(bin_paths, &command.rr, command.iter, &command.test_opts);
     let reports = runner.run()?;
-
     println!("{}", reports);
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod test {
