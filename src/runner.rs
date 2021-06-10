@@ -3,12 +3,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
 use anyhow::Context;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use subprocess::ExitStatus;
 use subprocess::{Exec, Redirection};
 use tempfile::TempDir;
 
@@ -121,7 +123,8 @@ impl Task for TestTask<'_> {
         let failures = parse_test_output(reader)?;
 
         // check if there was an issue with rr and return it
-        if !out.wait()?.success() && failures.is_empty() {
+        let status = out.wait()?;
+        if !status.success() && !matches!(status, ExitStatus::Signaled(_)) && failures.is_empty() {
             anyhow::bail!("Unexpected test error:\n{}", buf);
         }
 
@@ -212,7 +215,7 @@ impl<'a> Runner<'a> {
     pub fn run(&mut self) -> anyhow::Result<Reports> {
         let mut reports = HashMap::new();
 
-        for bin in self.bins.iter() {
+        'outer: for bin in self.bins.iter() {
             println!("Running tests from {}", bin.display());
             let mut task: Box<dyn Task> = if self.rr.record {
                 Box::new(RrTask::new(&bin, &self.rr, &self.test_opts))
@@ -228,6 +231,10 @@ impl<'a> Runner<'a> {
             bar.tick();
 
             for i in 0..self.times {
+                if super::SHOULD_EXIT.load(Ordering::SeqCst) {
+                    break 'outer;
+                }
+
                 let mut dst_recordings = None;
 
                 let report = task.run()?;

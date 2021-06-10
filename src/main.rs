@@ -3,6 +3,8 @@ mod report;
 mod runner;
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use cargo::core::compiler::CompileMode;
 use cargo::core::Workspace;
@@ -13,8 +15,10 @@ use cargo::util::config::Config;
 use cargo::util::interning::InternedString;
 use runner::Runner;
 use structopt::StructOpt;
-
 use args::Command;
+use once_cell::sync::Lazy;
+
+pub static SHOULD_EXIT: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 
 fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
     let manifest_path = std::env::current_dir()?.join("Cargo.toml");
@@ -22,7 +26,7 @@ fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
     let workspace = Workspace::new(&manifest_path, &config)?;
 
     let mut options = CompileOptions::new(&config, CompileMode::Test)?;
-    options.build_config.message_format = MessageFormat::Short;
+    options.build_config.message_format = MessageFormat::Human;
 
     if command.release {
         let profile = InternedString::new("release");
@@ -36,6 +40,11 @@ fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
 }
 
 fn main() -> anyhow::Result<()> {
+
+    ctrlc::set_handler(move || {
+        SHOULD_EXIT.store(true, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
     let command = Command::from_args();
 
     let bin_paths = compile_tests(&command)?;
