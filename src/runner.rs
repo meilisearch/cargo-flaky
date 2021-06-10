@@ -160,7 +160,7 @@ impl<'a> RrTask<'a> {
 
         cmd = cmd
             .arg("-o")
-            .arg(record_path.join(format!("record_iter_{}", self.iter)))
+            .arg(record_path.join("recording"))
             .arg(&self.bin)
             .args(&["--test-threads", &test_threads]);
 
@@ -269,6 +269,7 @@ impl<'a> Runner<'a> {
                 }
 
                 if let Some((src, dst)) = report.recording.zip(dst_recordings) {
+                    let src = src.path().join("recording");
                     std::fs::rename(src, dst)?;
                 }
 
