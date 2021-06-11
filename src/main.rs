@@ -68,6 +68,10 @@ fn main() -> anyhow::Result<()> {
     let reports = runner.run()?;
     println!("{}", reports);
 
+    if reports.failed_tests() > 0 {
+        std::process::exit(1);
+    }
+
     Ok(())
 }
 
