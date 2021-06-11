@@ -41,12 +41,18 @@ pub struct Reports {
     total_iters: usize,
 }
 
+impl Reports {
+    pub fn failed_tests(&self) -> usize {
+        self.reports.len()
+    }
+}
+
 impl fmt::Display for Reports {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
             "====== FOUND {} FAILING TESTS ======",
-            self.reports.len()
+            self.failed_tests()
         )?;
         for (_, report) in self.reports.iter() {
             writeln!(f, "test: {}", report.name)?;
