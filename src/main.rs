@@ -35,7 +35,7 @@ fn compile_tests(command: &Command) -> anyhow::Result<Vec<PathBuf>> {
             let json: Value = serde_json::from_str(&buf)?;
             if let Some(reason) = json.get("reason") {
                 if reason == "compiler-artifact"
-                    && json["target"]["kind"].as_array().unwrap() == &["bin"]
+                    && json["profile"]["test"].as_bool().unwrap_or(false)
                 {
                     for path in json["filenames"]
                         .as_array()
