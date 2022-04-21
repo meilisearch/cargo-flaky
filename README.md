@@ -10,7 +10,7 @@ Flaky tests are notoriously annoying and difficult to debug, because of their ve
 
 from source:
 ```bash
-git clone https://github.com/MarinPostma/cargo-flaky.github
+git clone https://github.com/meilisearch/cargo-flaky.github
 cd cargo flaky
 cargo install --path .
 ```
