@@ -110,9 +110,16 @@ impl Task for TestTask<'_> {
 
         let mut buf = String::new();
 
-        let test_threads = self.test_opts.jobs.unwrap_or_else(|| num_cpus::get()).to_string();
-        let cmd = Exec::cmd(&self.bin)
-            .args(&["--test-threads", &test_threads]);
+        let test_threads = self
+            .test_opts
+            .jobs
+            .unwrap_or_else(num_cpus::get)
+            .to_string();
+
+        let mut args = vec!["--test-threads", &test_threads];
+        args.extend(self.test_opts.extra.iter().map(|s| s.as_str()));
+
+        let cmd = Exec::cmd(&self.bin).args(&args);
 
         let mut out = cmd
             .stdout(Redirection::Pipe)

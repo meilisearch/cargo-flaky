@@ -58,6 +58,9 @@ pub struct RrOptions {
 pub struct TestOptions {
     #[arg(long, short)]
     pub jobs: Option<usize>,
+
+    #[arg(last = true)]
+    pub extra: Vec<String>,
 }
 
 impl Deref for Command {
