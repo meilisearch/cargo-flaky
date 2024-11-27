@@ -1,9 +1,14 @@
+use clap::Parser;
 use std::{ops::Deref, path::PathBuf};
 
-use structopt::StructOpt;
-
-#[derive(Debug, StructOpt)]
-#[structopt(bin_name = "cargo")]
+#[derive(Debug, Parser)]
+#[command(
+    version,
+    about,
+    long_about = "This command allows you to run your tests an arbitrary number of times to try
+        to find flaky tests, return as report of the found failing tests.",
+    bin_name = "cargo"
+)]
 pub enum Command {
     #[structopt(name = "flaky")]
     #[structopt(
@@ -13,44 +18,45 @@ pub enum Command {
     Flaky(Args),
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(bin_name = "cargo")]
+#[derive(Debug, Parser)]
+#[command(bin_name = "cargo")]
 pub struct Args {
     /// Whether to run the tests in release mode.
-    #[structopt(long)]
+    #[arg(long)]
     pub release: bool,
     /// The number of times the tests have to be ran.
-    #[structopt(long, short, default_value = "100")]
+    #[arg(long, short, default_value = "100")]
     pub iter: usize,
-    /// If set, runs for all the iteration defined by repeat, otherwise, stops as soon as a faling
-    /// test is found.
-    #[structopt(long, short)]
-    pub args: Option<String>,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub rr: RrOptions,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub test_opts: TestOptions,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct RrOptions {
     /// Whether to record the failing tests using rr. This require rr to be installed on your
     /// system.
-    #[structopt(long, short)]
+    #[arg(long, short)]
     pub record: bool,
     /// Where to save the rr recording.
-    #[structopt(long, short = "o", requires_if("record", "true"), default_value = "recordings")]
+    #[arg(
+        long,
+        short('o'),
+        requires_if("record", "true"),
+        default_value = "recordings"
+    )]
     pub record_out_dir: PathBuf,
     /// Enable chaos mode for rr
-    #[structopt(long, requires_if("record", "true"))]
+    #[arg(long, requires_if("record", "true"))]
     pub chaos: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct TestOptions {
-    #[structopt(long, short)]
+    #[arg(long, short)]
     pub jobs: Option<usize>,
 }
 
@@ -59,7 +65,7 @@ impl Deref for Command {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::Flaky(ref args) => args
+            Self::Flaky(ref args) => args,
         }
     }
 }

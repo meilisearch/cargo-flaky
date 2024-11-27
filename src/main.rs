@@ -8,10 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Context;
 use args::Command;
+use clap::Parser as _;
 use once_cell::sync::Lazy;
 use runner::Runner;
 use serde_json::Value;
-use structopt::StructOpt;
 use subprocess::{Exec, Redirection};
 
 pub static SHOULD_EXIT: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -60,7 +60,7 @@ fn main() -> anyhow::Result<()> {
     })
     .expect("Error setting Ctrl-C handler");
 
-    let command = Command::from_args();
+    let command = Command::parse();
 
     let bin_paths = compile_tests(&command)?;
 
