@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
 mod test {
     #[test]
     fn test() {
-        std::thread::sleep_ms(500);
+        std::thread::sleep(std::time::Duration::from_millis(500));
         panic!()
     }
 }
