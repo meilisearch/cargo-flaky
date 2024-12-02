@@ -110,9 +110,16 @@ impl Task for TestTask<'_> {
 
         let mut buf = String::new();
 
-        let test_threads = self.test_opts.jobs.unwrap_or_else(|| num_cpus::get()).to_string();
-        let cmd = Exec::cmd(&self.bin)
-            .args(&["--test-threads", &test_threads]);
+        let test_threads = self
+            .test_opts
+            .jobs
+            .unwrap_or_else(num_cpus::get)
+            .to_string();
+
+        let mut args = vec!["--test-threads", &test_threads];
+        args.extend(self.test_opts.extra.iter().map(|s| s.as_str()));
+
+        let cmd = Exec::cmd(&self.bin).args(&args);
 
         let mut out = cmd
             .stdout(Redirection::Pipe)
@@ -162,7 +169,11 @@ impl<'a> RrTask<'a> {
             cmd = cmd.arg("--chaos");
         }
 
-        let test_threads = self.test_opts.jobs.unwrap_or_else(|| num_cpus::get()).to_string();
+        let test_threads = self
+            .test_opts
+            .jobs
+            .unwrap_or_else(num_cpus::get)
+            .to_string();
 
         cmd = cmd
             .arg("-o")
@@ -170,9 +181,7 @@ impl<'a> RrTask<'a> {
             .arg(&self.bin)
             .args(&["--test-threads", &test_threads]);
 
-        cmd = cmd
-            .stdout(Redirection::Pipe)
-            .stderr(Redirection::Merge);
+        cmd = cmd.stdout(Redirection::Pipe).stderr(Redirection::Merge);
 
         cmd
     }
@@ -214,8 +223,18 @@ trait Task {
 }
 
 impl<'a> Runner<'a> {
-    pub fn new(bins: Vec<PathBuf>, rr: &'a RrOptions, times: usize, test_opts: &'a TestOptions) -> Self {
-        Self { bins, rr, times, test_opts }
+    pub fn new(
+        bins: Vec<PathBuf>,
+        rr: &'a RrOptions,
+        times: usize,
+        test_opts: &'a TestOptions,
+    ) -> Self {
+        Self {
+            bins,
+            rr,
+            times,
+            test_opts,
+        }
     }
 
     pub fn run(&mut self) -> anyhow::Result<Reports> {
@@ -224,15 +243,17 @@ impl<'a> Runner<'a> {
         'outer: for bin in self.bins.iter() {
             println!("Running tests from {}", bin.display());
             let mut task: Box<dyn Task> = if self.rr.record {
-                Box::new(RrTask::new(&bin, &self.rr, &self.test_opts))
+                Box::new(RrTask::new(bin, self.rr, self.test_opts))
             } else {
-                Box::new(TestTask::new(&bin, &self.test_opts))
+                Box::new(TestTask::new(bin, self.test_opts))
             };
 
             let bar = ProgressBar::new(self.times as u64);
-            bar.set_style(ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} eta: {eta}")
-                .progress_chars("##-"));
+            bar.set_style(
+                ProgressStyle::default_bar()
+                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} eta: {eta}")
+                    .progress_chars("##-"),
+            );
 
             bar.tick();
 
@@ -246,7 +267,6 @@ impl<'a> Runner<'a> {
                 let report = task.run()?;
                 if !report.failures.is_empty() {
                     for failure in report.failures.iter() {
-
                         if !reports.contains_key(&failure.name) {
                             bar.println(format!("Test failed: {}", failure.name));
                         }
