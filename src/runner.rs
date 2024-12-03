@@ -251,8 +251,10 @@ impl<'a> Runner<'a> {
             let bar = ProgressBar::new(self.times as u64);
             bar.set_style(
                 ProgressStyle::default_bar()
-                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} eta: {eta}")
-                    .progress_chars("##-"),
+                    .progress_chars("##-")
+                    .template(
+                        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} eta: {eta}",
+                    )?,
             );
 
             bar.tick();
