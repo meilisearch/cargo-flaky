@@ -59,6 +59,11 @@ pub struct TestOptions {
     #[arg(long, short)]
     pub jobs: Option<usize>,
 
+    /// Argument to forward when building tests
+    #[arg(long, short)]
+    pub build_args: Vec<String>,
+
+    /// Argument to forward when running tests
     #[arg(last = true)]
     pub extra: Vec<String>,
 }
